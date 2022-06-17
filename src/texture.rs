@@ -9,6 +9,7 @@ use crate::{
 
 use crate::quad_gl::{DrawMode, Vertex};
 use glam::{vec2, Vec2};
+use image::ImageError;
 
 pub use crate::quad_gl::FilterMode;
 
@@ -213,7 +214,15 @@ pub async fn load_image(path: &str) -> Result<Image, FileError> {
 pub async fn load_texture(path: &str) -> Result<Texture2D, FileError> {
     let bytes = load_file(path).await?;
 
-    Ok(Texture2D::from_file_with_format(&bytes[..], None))
+    match Texture2D::from_file_with_format(&bytes[..], None){
+        Ok(texture) => {Ok(texture)}
+        Err(_) => {
+            Err(FileError{
+                kind: miniquad::fs::Error::DownloadFailed,
+                path: path.to_owned(),
+            })
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -479,21 +488,19 @@ impl Texture2D {
     pub fn from_file_with_format<'a>(
         bytes: &[u8],
         format: Option<image::ImageFormat>,
-    ) -> Texture2D {
+    ) -> Result<Texture2D, ImageError> {
         let img = if let Some(fmt) = format {
-            image::load_from_memory_with_format(bytes, fmt)
-                .unwrap_or_else(|e| panic!("{}", e))
+            image::load_from_memory_with_format(bytes, fmt)?
                 .to_rgba8()
         } else {
-            image::load_from_memory(bytes)
-                .unwrap_or_else(|e| panic!("{}", e))
+            image::load_from_memory(bytes)?
                 .to_rgba8()
         };
         let width = img.width() as u16;
         let height = img.height() as u16;
         let bytes = img.into_raw();
 
-        Self::from_rgba8(width, height, &bytes)
+        Ok(Self::from_rgba8(width, height, &bytes))
     }
 
     /// Creates a Texture2D from an [Image].
